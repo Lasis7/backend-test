@@ -1,8 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 app.use(express.json());
 const morgan = require('morgan');
-require('dotenv').config();
+const Contact = require('./models/contact');
 
 morgan.token('data', function (req, res) {
   return JSON.stringify(req.body);
@@ -15,7 +16,7 @@ app.use(
     ':method :url :status :res[content-length] - :response-time ms :data',
     {
       skip: function (req, res) {
-        return res.statusCode >= 400;
+        return req.method !== 'POST' || res.statusCode >= 400;
       },
     }
   )
@@ -45,7 +46,9 @@ let people = [
 ];
 
 app.get('/api/persons', (request, response) => {
-  response.json(people);
+  Contact.find({}).then((contacts) => {
+    response.json(contacts);
+  });
 });
 
 app.get('/info', (request, response) => {
@@ -73,9 +76,8 @@ app.delete('/api/persons/:id', (request, response) => {
 });
 
 app.post('/api/persons', (request, response) => {
-  const randomId = Math.floor(Math.random() * 1000) + 1;
-
   const person = request.body;
+  console.log(person);
   if (!person.name && !person.number) {
     return response.status(400).json({
       error: 'information is missing: name, number',
@@ -85,14 +87,23 @@ app.post('/api/persons', (request, response) => {
     return response.status(400).json({
       error: `${errorMessage} is missing`,
     });
-  } else if (checkNames(person.name)) {
-    return response.status(400).json({
-      error: 'person is already in the phonebook',
-    });
+    // } else if (checkNames(person.name)) {
+    //   return response.status(400).json({
+    //     error: 'person is already in the phonebook',
+    //   });
   } else {
-    person.id = randomId;
-    people = people.concat(person);
-    response.json(person);
+    const contact = new Contact({
+      name: person.name,
+      number: person.number,
+    });
+    contact
+      .save()
+      .then((savedContact) => {
+        response.json(savedContact);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
   }
 });
 
@@ -103,7 +114,7 @@ const checkNames = (name) => {
   );
 };
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
